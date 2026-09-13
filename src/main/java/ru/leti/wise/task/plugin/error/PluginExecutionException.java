@@ -5,6 +5,6 @@ import lombok.RequiredArgsConstructor;
 
 @Getter
 @RequiredArgsConstructor
-public class PluginExecutionException extends RuntimeException {
-    private final String message;
+public class PluginExecutionException extends RuntimeException{
+    private final String pluginLogs;
 }

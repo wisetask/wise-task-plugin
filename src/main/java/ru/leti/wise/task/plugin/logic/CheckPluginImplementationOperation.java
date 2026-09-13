@@ -1,5 +1,6 @@
 package ru.leti.wise.task.plugin.logic;
 
+import io.grpc.Status;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.leti.wise.task.plugin.PluginGrpc.CheckPluginImplementationRequest;
@@ -9,21 +10,19 @@ import ru.leti.wise.task.plugin.PluginOuterClass.GraphTestResult;
 import ru.leti.wise.task.plugin.PluginOuterClass.Solution;
 import ru.leti.wise.task.plugin.domain.PluginEntity;
 import ru.leti.wise.task.plugin.domain.PluginType;
-import ru.leti.wise.task.plugin.domain.graph.PluginService;
+import ru.leti.wise.task.plugin.domain.graph.external.ExternalPluginService;
+import ru.leti.wise.task.plugin.domain.graph.internal.InternalPluginService;
 import ru.leti.wise.task.plugin.error.BusinessException;
-import ru.leti.wise.task.plugin.error.ErrorCode;
 import ru.leti.wise.task.plugin.repository.PluginRepository;
 import ru.leti.wise.task.plugin.service.PluginValidationService;
 import ru.leti.wise.task.plugin.service.grpc.GraphGrpcService;
 
 import java.util.ArrayList;
+import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
 
 import static java.util.UUID.fromString;
-import static org.apache.tomcat.util.codec.binary.Base64.decodeBase64;
-import static ru.leti.wise.task.plugin.error.ErrorCode.INVALID_PLUGIN_IMPLEMENTATION_TYPE;
-import static ru.leti.wise.task.plugin.error.ErrorCode.PLUGIN_NOT_FOUND;
 
 @Component
 @RequiredArgsConstructor
@@ -31,29 +30,26 @@ public class CheckPluginImplementationOperation {
 
     private final PluginRepository pluginRepository;
     private final GraphGrpcService graphGrpcService;
-    private final PluginService externalPluginService;
-    private final PluginService internalPluginService;
-    private final PluginValidationService pluginValidationService;
+    private final ExternalPluginService externalPluginService;
+    private final InternalPluginService internalPluginService;
 
     public CheckPluginImplementationResponse activate(CheckPluginImplementationRequest request) {
 
         var basePluginEntity = pluginRepository.findById(fromString(request.getId()))
-                .orElseThrow(() -> new BusinessException(PLUGIN_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(Status.NOT_FOUND, "Плагин не найден"));
 
         if (basePluginEntity.getPluginType() != PluginType.GRAPH_PROPERTY
                 && basePluginEntity.getPluginType() != PluginType.GRAPH_CHARACTERISTIC) {
-            throw new BusinessException(INVALID_PLUGIN_IMPLEMENTATION_TYPE);
+            throw new BusinessException(Status.INVALID_ARGUMENT, "Тип плагина некорректный");
         }
 
         List<GraphTestResult> graphTestResults = new ArrayList<>();
         boolean result = true;
         var newPluginEntity = PluginEntity.builder()
                 .pluginType(basePluginEntity.getPluginType())
-                .jarFile(decodeBase64(request.getFile()))
+                .jarFile(Base64.getDecoder().decode(request.getFile()))
                 .jarName(basePluginEntity.getJarName())
                 .build();
-
-        validateImplementation(newPluginEntity);
 
         for (int i = 0; i < 5; i++) {
             var graphTestResult = runAlgorithms(basePluginEntity, newPluginEntity);
@@ -93,12 +89,6 @@ public class CheckPluginImplementationOperation {
                 .build();
     }
 
-    private void validateImplementation(PluginEntity newPluginEntity) {
-        boolean isValid = pluginValidationService.isValidate(newPluginEntity);
-        if (!isValid) {
-            throw new BusinessException(ErrorCode.TOO_LONG_PLUGIN_EXECUTION);
-        }
-    }
 
     private Solution generateSolution() {
         var vertexCount = ThreadLocalRandom.current().nextInt(1, 6);

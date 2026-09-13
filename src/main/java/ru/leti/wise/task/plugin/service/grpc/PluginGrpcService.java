@@ -1,20 +1,18 @@
 package ru.leti.wise.task.plugin.service.grpc;
 
-import com.google.protobuf.Empty;
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
-import org.lognet.springboot.grpc.GRpcService;
-import org.lognet.springboot.grpc.recovery.GRpcExceptionHandler;
-import org.lognet.springboot.grpc.recovery.GRpcExceptionScope;
-import org.lognet.springboot.grpc.recovery.GRpcServiceAdvice;
+import org.springframework.grpc.server.advice.GrpcAdvice;
+import org.springframework.grpc.server.advice.GrpcExceptionHandler;
+import org.springframework.grpc.server.service.GrpcService;
 import ru.leti.wise.task.plugin.PluginGrpc;
 import ru.leti.wise.task.plugin.PluginGrpc.*;
 import ru.leti.wise.task.plugin.PluginServiceGrpc.PluginServiceImplBase;
 import ru.leti.wise.task.plugin.error.BusinessException;
-import ru.leti.wise.task.plugin.error.GrpcErrorHandler;
 import ru.leti.wise.task.plugin.error.PluginExecutionException;
 import ru.leti.wise.task.plugin.helper.LogInterceptor;
 import ru.leti.wise.task.plugin.logic.*;
@@ -23,11 +21,10 @@ import java.util.UUID;
 
 @Slf4j
 @Observed
-@GRpcService(interceptors = {LogInterceptor.class})
+@GrpcService(interceptors = {LogInterceptor.class})
 @RequiredArgsConstructor
 public class PluginGrpcService extends PluginServiceImplBase {
 
-    private final IsOwnerPluginOperation isOwnerPluginOperation;
     private final GetPluginOperation getPluginOperation;
     private final GetPluginsOperation getPluginsOperation;
     private final DeletePluginOperation deletePluginOperation;
@@ -37,18 +34,12 @@ public class PluginGrpcService extends PluginServiceImplBase {
     private final CheckPluginImplementationOperation checkPluginImplementationOperation;
     private final ValidatePluginOperation validatePluginOperation;
 
-    @Override
-    public void isOwnerPlugin(IsOwnerPluginRequest request, StreamObserver<IsOwnerPluginResponse> responseObserver) {
-        responseObserver.onNext(isOwnerPluginOperation.activate(request));
-        responseObserver.onCompleted();
-    }
 
     @Override
-    public void getAllPlugins(Empty request, StreamObserver<GetAllPluginsResponse> responseObserver) {
-        responseObserver.onNext(getPluginsOperation.activate());
-        responseObserver.onCompleted();
+    public void getAllPlugins(GetAllPluginRequest request, StreamObserver<GetAllPluginsResponse> responseStreamObserver){
+        responseStreamObserver.onNext(getPluginsOperation.activate(request));
+        responseStreamObserver.onCompleted();
     }
-
     @Override
     public void getPlugin(GetPluginRequest request, StreamObserver<GetPluginResponse> responseObserver) {
         responseObserver.onNext(getPluginOperation.activate(UUID.fromString(request.getId())));
@@ -94,19 +85,17 @@ public class PluginGrpcService extends PluginServiceImplBase {
         responseObserver.onCompleted();
     }
 
-    @GRpcServiceAdvice
+    @GrpcAdvice
     @RequiredArgsConstructor
-    static class ErrorHandler {
-        private final GrpcErrorHandler grpcErrorHandler;
-
-        @GRpcExceptionHandler
-        public Status handleBusinessException(BusinessException e, GRpcExceptionScope scope) {
-            return grpcErrorHandler.processBusinessError(e, scope);
+    public static class ErrorHandler {
+        @GrpcExceptionHandler
+        public StatusRuntimeException handleBusinessException(BusinessException e) {
+            return e.getStatus().withDescription(e.getMessage()).asRuntimeException();
         }
 
-        @GRpcExceptionHandler
-        public Status handlePluginExecutionException(PluginExecutionException e, GRpcExceptionScope scope) {
-            return grpcErrorHandler.processPluginError(e, scope);
+        @GrpcExceptionHandler
+        public StatusRuntimeException handeRuntimeException(PluginExecutionException e) {
+            return Status.INTERNAL.withDescription("Произошла ошибка при выполнении плагина: " + e.getPluginLogs()).asRuntimeException();
         }
     }
 }

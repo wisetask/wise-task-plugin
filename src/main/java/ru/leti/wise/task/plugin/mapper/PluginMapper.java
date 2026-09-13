@@ -8,8 +8,8 @@ import ru.leti.wise.task.plugin.domain.PluginEntity;
 import ru.leti.wise.task.plugin.domain.PluginType;
 
 import java.util.List;
+import java.util.Base64;
 
-import static org.apache.tomcat.util.codec.binary.Base64.decodeBase64;
 
 @Mapper(componentModel = "spring", nullValueCheckStrategy = NullValueCheckStrategy.ALWAYS)
 public interface PluginMapper {
@@ -46,6 +46,6 @@ public interface PluginMapper {
         if (base64.isBlank()) {
             return null;
         }
-        return decodeBase64(base64);
+        return Base64.getDecoder().decode(base64);
     }
 }

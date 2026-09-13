@@ -1,5 +1,6 @@
 package ru.leti.wise.task.plugin.logic;
 
+import io.grpc.Status;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 import ru.leti.wise.task.plugin.PluginGrpc.GetPluginResponse;
@@ -19,7 +20,10 @@ public class GetPluginOperation {
 
     public GetPluginResponse activate(UUID id) {
         var plugin = pluginRepository.findById(id)
-                .orElseThrow(() -> new BusinessException(ErrorCode.PLUGIN_NOT_FOUND));
+                .orElseThrow(() -> new BusinessException(Status.NOT_FOUND,
+                        "Плагин с id: %s не найден".formatted(id)
+                        )
+                );
         return GetPluginResponse.newBuilder()
                 .setPlugin(pluginMapper.pluginEntityToPlugin(plugin))
                 .build();

@@ -4,4 +4,5 @@ public enum GraphType {
     DIRECT,
     UNDIRECT,
     ANY,
+    UNRECOGNIZED
 }

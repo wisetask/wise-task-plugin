@@ -1,5 +1,6 @@
 package ru.leti.wise.task.plugin.logic;
 
+import io.grpc.Status;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
@@ -30,16 +31,14 @@ public class CreateExternalPluginOperation {
     private final PluginValidationService pluginValidationService;
 
     public CreatePluginResponse activate(CreatePluginRequest request) {
-
         Plugin plugin = request.getPlugin();
-
         PluginEntity pluginEntity = pluginMapper.pluginToPluginEntity(plugin);
-        boolean isValid = pluginValidationService.isValidate(pluginEntity);
-        if (isValid) {
-            pluginRepository.save(pluginEntity);
-        } else {
-            throw new BusinessException(ErrorCode.TOO_LONG_PLUGIN_EXECUTION);
+        if(pluginEntity.getJarFile() == null){
+            throw new BusinessException(Status.INVALID_ARGUMENT, "Отсутствует Jar файл для плагина");
         }
+        pluginValidationService.validatePlugin(pluginEntity);
+        pluginRepository.save(pluginEntity);
+
         return CreatePluginResponse.newBuilder()
                 .setPlugin(plugin)
                 .build();

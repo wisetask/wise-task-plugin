@@ -6,8 +6,7 @@ import "plugin.proto";
 import "google/protobuf/empty.proto";
 
 service PluginService {
-  rpc isOwnerPlugin (IsOwnerPluginRequest) returns (IsOwnerPluginResponse);
-  rpc GetAllPlugins (google.protobuf.Empty) returns (GetAllPluginsResponse);
+  rpc GetAllPlugins (GetAllPluginRequest) returns (GetAllPluginsResponse);
   rpc CreatePlugin (CreatePluginRequest) returns (CreatePluginResponse);
   rpc GetPlugin (GetPluginRequest) returns (GetPluginResponse);
   rpc UpdatePlugin (UpdatePluginRequest) returns (UpdatePluginResponse);
@@ -17,24 +16,41 @@ service PluginService {
   rpc ValidatePlugin (ValidatePluginRequest) returns (ValidatePluginResponse);
 }
 
-
-
-//IsOwnerAnnotation
-message IsOwnerPluginRequest {
-  string user_id = 1;
-  string plugin_id = 2;
+message PaginationRequest {
+  int32 page_size = 1;
+  int32 page = 2;
 }
 
-message IsOwnerPluginResponse {
-  bool result = 1;
+message PluginFilter {
+  optional string name = 1;
+  optional string description = 2;
+  optional string category = 3;
+  optional GraphType graph_type = 4;
+  optional bool is_valid = 5;
+  optional PluginType plugin_type = 6;
+  optional bool is_internal = 7;
+  optional string author_id = 9;
 }
 
-//GetAllPlugins
+message GetAllPluginRequest {
+  PaginationRequest pagination = 1;
+  PluginFilter filter = 2;
+}
+
+message PaginationResponse {
+  int32 page = 1;
+  int32 page_size = 2;
+  int64 total_count = 3;
+  int32 total_pages = 4;
+  bool has_next = 5;
+  bool has_previous = 6;
+}
+
 message GetAllPluginsResponse {
-  repeated Plugin plugin = 1;
+  repeated Plugin items = 1;
+  PaginationResponse pagination = 2;
 }
 
-//CreatePlugin
 message CreatePluginRequest {
   Plugin plugin = 1;
 }
@@ -43,7 +59,6 @@ message CreatePluginResponse {
   Plugin plugin = 1;
 }
 
-//Validate plugin
 message ValidatePluginRequest {
   string id = 1;
 }
@@ -52,7 +67,6 @@ message ValidatePluginResponse {
   string id = 1;
 }
 
-//GetPlugin
 message GetPluginRequest {
   string id = 1;
 }
@@ -61,7 +75,6 @@ message GetPluginResponse {
   Plugin plugin = 1;
 }
 
-//UpdatePlugin
 message UpdatePluginRequest {
   Plugin plugin = 1;
 }
@@ -70,7 +83,6 @@ message UpdatePluginResponse {
   Plugin plugin = 1;
 }
 
-//DeletePlugin
 message DeletePluginRequest {
   string id = 1;
 }
@@ -79,7 +91,6 @@ message DeletePluginResponse {
   string id = 1;
 }
 
-//CheckPluginSolution
 message CheckPluginSolutionRequest {
   Solution solution = 1;
 }
@@ -88,7 +99,6 @@ message CheckPluginSolutionResponse {
   string result = 1;
 }
 
-//CheckPluginImplementation
 message CheckPluginImplementationRequest {
   string id = 1;
   string file = 2;

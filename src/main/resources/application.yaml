@@ -1,0 +1,73 @@
+spring:
+  application:
+    name: wise-task-plugin
+  threads:
+    virtual:
+      enabled: true
+  grpc:
+    server:
+      port: ${PLUGIN_GRPC_PORT:6567}
+  datasource:
+    url: jdbc:postgresql://${DB:localhost}:${DB_PORT:5432}/${PLUGIN_DB:wise_task_plugin}
+    username: ${PLUGIN_DB_USER:wise_task_plugin}
+    password: ${PLUGIN_DB_PASSWORD:wise_task_plugin}
+    driver-class-name: org.postgresql.Driver
+  jpa:
+    generate-ddl: false
+    show-sql: true
+    properties:
+      hibernate:
+        format_sql: true
+        jdbc:
+          use_streams_for_binary: false
+  docker:
+    host: unix:///var/run/docker.sock
+    connection-timeout: 30s
+    response-timeout: 45s
+    memory-usage-mb: 256
+    cpu-quota: 50000 # 0.5 cpu
+    container-work-timeout: 10s
+  plugin:
+    temp-folder: "./plugin"
+    runner: file:src/main/resources/runner.jar
+
+
+path-plugin: ${PLUGIN_PATH:./plugins/}
+plugin-validation-limit: ${PLUGIN_VALIDATION_LIMIT:300s}
+
+logging:
+  level:
+    org.hibernate: ${LOGGING_LEVEL:INFO}
+    ru.leti.wise.task.plugin: ${LOGGING_LEVEL:INFO}
+
+grpc:
+  service:
+    graph:
+      port: ${GRAPH_GRPC_PORT:6565}
+      host: ${GRAPH_APP_NAME:localhost}
+
+management:
+  tracing:
+    sampling:
+      probability: 1.0
+  opentelemetry:
+    tracing:
+      export:
+        otlp:
+          endpoint: http://${TEMPO_HOST:localhost}:${TEMPO_PORT:4318}/v1/traces
+  otlp:
+    metrics:
+      export:
+        enabled: false # prometheus will do it
+  endpoints:
+    web:
+      exposure:
+        include: health,info,prometheus,metrics
+  metrics:
+    tags:
+      application: ${spring.application.name}
+    distribution:
+      percentiles-histogram:
+        http:
+          server:
+            requests: true
