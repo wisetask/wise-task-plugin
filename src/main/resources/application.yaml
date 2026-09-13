@@ -6,9 +6,9 @@ spring:
       enabled: true
   grpc:
     server:
-      port: ${PROFILE_GRPC_PORT:6567}
+      port: ${PLUGIN_GRPC_PORT:6567}
   datasource:
-    url: jdbc:postgresql://${DB:localhost}:5432/${PLUGIN_DB:wise_task_plugin}
+    url: jdbc:postgresql://${DB:localhost}:${DB_PORT:5432}/${PLUGIN_DB:wise_task_plugin}
     username: ${PLUGIN_DB_USER:wise_task_plugin}
     password: ${PLUGIN_DB_PASSWORD:wise_task_plugin}
     driver-class-name: org.postgresql.Driver
@@ -33,7 +33,7 @@ spring:
 
 
 path-plugin: ${PLUGIN_PATH:./plugins/}
-plugin-validation-limit: ${PLUGIN_VALIDATION_LIMIT:30000000s}
+plugin-validation-limit: ${PLUGIN_VALIDATION_LIMIT:300s}
 
 logging:
   level:

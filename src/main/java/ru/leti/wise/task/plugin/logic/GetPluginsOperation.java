@@ -55,15 +55,12 @@ public class GetPluginsOperation {
     public Specification<PluginEntity> byFilter(PluginGrpc.PluginFilter filter) {
         return (root, query, cb) -> {
             List<Predicate> predicates = new ArrayList<>();
-
             if (filter.hasName())
-                predicates.add(cb.equal(root.get("name"), filter.getName()));
-
+                predicates.add(cb.like(cb.lower(root.get("name")), "%" + filter.getName().toLowerCase() + "%"));
             if (filter.hasDescription())
-                predicates.add(cb.equal(root.get("description"), filter.getDescription()));
-
+                predicates.add(cb.like(root.get("description"), "%" + filter.getDescription().toLowerCase() + "%"));
             if (filter.hasCategory())
-                predicates.add(cb.equal(root.get("category"), filter.getCategory()));
+                predicates.add(cb.like(root.get("category"), "%s" + filter.getCategory().toLowerCase() + "%s"));
 
             if (filter.hasGraphType())
                 predicates.add(cb.equal(
@@ -82,6 +79,9 @@ public class GetPluginsOperation {
 
             if (filter.hasIsInternal())
                 predicates.add(cb.equal(root.get("isInternal"), filter.getIsInternal()));
+
+            if (filter.hasAuthorId())
+                predicates.add(cb.equal(root.get("authorId"), filter.getAuthorId()));
 
             return cb.and(predicates.toArray(Predicate[]::new));
         };

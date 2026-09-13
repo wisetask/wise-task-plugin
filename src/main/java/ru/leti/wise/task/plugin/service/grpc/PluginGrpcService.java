@@ -1,6 +1,7 @@
 package ru.leti.wise.task.plugin.service.grpc;
 
 import io.grpc.Status;
+import io.grpc.StatusRuntimeException;
 import io.grpc.stub.StreamObserver;
 import io.micrometer.observation.annotation.Observed;
 import lombok.RequiredArgsConstructor;
@@ -88,13 +89,13 @@ public class PluginGrpcService extends PluginServiceImplBase {
     @RequiredArgsConstructor
     public static class ErrorHandler {
         @GrpcExceptionHandler
-        public Status handleBusinessException(BusinessException e) {
-            return e.getStatus().withDescription(e.getMessage());
+        public StatusRuntimeException handleBusinessException(BusinessException e) {
+            return e.getStatus().withDescription(e.getMessage()).asRuntimeException();
         }
 
         @GrpcExceptionHandler
-        public Status handeRuntimeException(PluginExecutionException e) {
-            return Status.INTERNAL.withDescription("Произошла ошибка при выполнении плагина: " + e.getPluginLogs());
+        public StatusRuntimeException handeRuntimeException(PluginExecutionException e) {
+            return Status.INTERNAL.withDescription("Произошла ошибка при выполнении плагина: " + e.getPluginLogs()).asRuntimeException();
         }
     }
 }

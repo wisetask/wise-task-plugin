@@ -29,6 +29,7 @@ message PluginFilter {
   optional bool is_valid = 5;
   optional PluginType plugin_type = 6;
   optional bool is_internal = 7;
+  optional string author_id = 9;
 }
 
 message GetAllPluginRequest {
