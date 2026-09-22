@@ -20,15 +20,29 @@ public class PluginValidationService {
     private final ExternalPluginService externalPluginService;
 
     public void validatePlugin(PluginEntity pluginEntity) {
-        testAbstractPlugin(pluginEntity);
+        log.info("Validating plugin: id={}, pluginClass={}, pluginType={}, graphType={}",
+                pluginEntity.getId(), pluginEntity.getJarName(), pluginEntity.getPluginType(), pluginEntity.getGraphType());
+        try {
+            testAbstractPlugin(pluginEntity);
+            log.info("Plugin validated successfully: id={}, pluginClass={}",
+                    pluginEntity.getId(), pluginEntity.getJarName());
+        } catch (RuntimeException e) {
+            log.warn("Plugin validation failed: id={}, pluginClass={}, reason={}",
+                    pluginEntity.getId(), pluginEntity.getJarName(), e.getMessage());
+            throw e;
+        }
     }
 
     private void testAbstractPlugin(PluginEntity pluginEntity) {
+        log.debug("Running abstract plugin test: id={}, pluginClass={}",
+                pluginEntity.getId(), pluginEntity.getJarName());
         externalPluginService.run(pluginEntity, prepareSolution());
     }
 
     private Solution prepareSolution() {
         var graph = getGraph();
+        log.debug("Prepared solution for plugin validation: graphId={}, vertices={}, edges={}, isDirect={}",
+                graph.getId(), graph.getVertexListCount(), graph.getEdgeListCount(), graph.getIsDirect());
         var solutionBuilder = Solution.newBuilder();
         return solutionBuilder.setGraph(graph).build();
     }

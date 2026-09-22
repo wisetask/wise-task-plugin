@@ -3,15 +3,35 @@ syntax = "proto3";
 package ru.leti.wise.task.graph;
 
 import "graph.proto";
+import "pagination.proto";
 import "google/protobuf/empty.proto";
 
 service GraphService {
-  rpc IsOwnerGraph(IsOwnerGraphRequest) returns (IsOwnerGraphResponse);
   rpc getGraphById (GetGraphByIdRequest) returns (GetGraphByIdResponse);
   rpc createGraph (CreateGraphRequest) returns (CreateGraphResponse);
   rpc generateRandomGraph (GenerateGraphRequest) returns (GenerateGraphResponse);
-  rpc getGraphLibrary (google.protobuf.Empty) returns (GetGraphLibraryResponse);
+  rpc getAllGraphs(GetAllGraphsRequest) returns (GetAllGraphsResponse);
   rpc removeGraph (RemoveGraphRequest) returns (RemoveGraphResponse);
+  rpc GetGraphsByIds(GraphIds) returns (GetGraphsByIdsResponse);
+}
+message GraphFilter {
+  string id = 1;
+  string authorId = 2;
+  int32 vertexCount = 3;
+  int32 edgeCount = 4;
+  bool isDirect = 5;
+  bool isNamed = 6;
+  string name = 7;
+}
+
+message GetAllGraphsRequest {
+  ru.leti.wise.task.pagination.PaginationRequest pagination = 1;
+  GraphFilter filter = 2;
+}
+
+message GetAllGraphsResponse {
+  repeated Graph items = 1;
+  ru.leti.wise.task.pagination.PaginationResponse pagination = 2;
 }
 
 message GenerateGraphRequest {
@@ -23,15 +43,6 @@ message GenerateGraphRequest {
 
 message RemoveGraphRequest {
   string id = 1;
-}
-
-message IsOwnerGraphRequest{
-  string user_id = 1;
-  string graph_id = 2;
-}
-
-message IsOwnerGraphResponse{
-  bool result = 1;
 }
 
 message RemoveGraphResponse {
@@ -60,4 +71,12 @@ message GetGraphByIdResponse {
 
 message GetGraphByIdRequest {
   string id = 1;
+}
+
+message GraphIds {
+  repeated string graph_ids = 1;
+}
+
+message GetGraphsByIdsResponse {
+  repeated Graph graphs = 1;
 }

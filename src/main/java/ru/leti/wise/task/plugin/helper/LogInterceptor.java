@@ -50,6 +50,10 @@ public class LogInterceptor implements ServerInterceptor {
 
         @Override
         public void close(Status status, Metadata trailers) {
+            if (!status.isOk()) {
+                log.warn("Method {} failed with status: {}",
+                        serverCall.getMethodDescriptor().getFullMethodName(), status);
+            }
             serverCall.close(status, trailers);
         }
 

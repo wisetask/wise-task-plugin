@@ -51,9 +51,16 @@ public class JarExecutor {
 
     private final Pattern exceptionRegex = Pattern.compile("exception", Pattern.CASE_INSENSITIVE);
 
+    private static final int MAX_LOG_SIZE = 2000;
+
+    private String truncate(String value, int maxLength) {
+        return value.length() <= maxLength ? value : value.substring(0, maxLength) + "...[truncated]";
+    }
+
     @PostConstruct
     public void postConstruct() {
         tempFolderPath = Paths.get(tempFolder).toAbsolutePath().normalize();
+        log.info("JarExecutor initialized: tempFolder={}, runnerJar={}", tempFolderPath, runnerJar);
     }
 
     @SneakyThrows
@@ -64,14 +71,21 @@ public class JarExecutor {
         Path graphPath = null;
         try {
             if (solution.getPayloadCase() != PluginOuterClass.Solution.PayloadCase.GRAPH) {
+                log.warn("Plugin does not support graphs: pluginId={}, payloadCase={}",
+                        plugin.getId(), solution.getPayloadCase());
                 throw new BusinessException(Status.INVALID_ARGUMENT, "Плагин не поддерживает графы");
             }
             if (!Files.exists(tempFolderPath)) {
+                log.debug("Creating temp folder for plugin execution: {}", tempFolderPath);
                 Files.createDirectories(tempFolderPath);
             }
             var graph = graphMapper.toGraph(solution.getGraph());
             var randomId = UUID.randomUUID();
             var pluginClassName = plugin.getJarName();
+            var pluginJarFile = plugin.getJarFile();
+            log.debug("Executing plugin jar: pluginId={}, pluginClass={}, jarSize={} bytes, graphId={}, vertices={}, edges={}, runId={}",
+                    plugin.getId(), pluginClassName, pluginJarFile == null ? 0 : pluginJarFile.length,
+                    solution.getGraph().getId(), graph.getVertexCount(), graph.getEdgeCount(), randomId);
             var pluginName = pluginClassName + "-" + randomId + ".jar";
             var jsonGraphFileName = "graph-" + randomId + ".json";
             var runnerFileName = "runner.jar";
@@ -85,6 +99,8 @@ public class JarExecutor {
             }
             var jsonGraph = JsonUtils.serializeGraph(graph);
             Files.writeString(graphPath, jsonGraph);
+            log.debug("Plugin execution files prepared: plugin={}, runner={}, graph={}, graphJsonSize={} bytes",
+                    pluginPath.getFileName(), runnerPath.getFileName(), graphPath.getFileName(), jsonGraph.length());
             var bind = new Bind(tempFolderPath.toAbsolutePath().toString(), new Volume(containerBaseDir));
             var container = dockerClient.createContainerCmd("eclipse-temurin:25-jre-alpine")
                     .withCmd("sh", "-c",
@@ -101,12 +117,16 @@ public class JarExecutor {
                             .withBinds(bind)
                     ).exec();
             containerId = container.getId();
+            log.info("Plugin container created: containerId={}, pluginId={}, pluginClass={}",
+                    containerId, plugin.getId(), pluginClassName);
             var callback = new WaitContainerResultCallback();
             dockerClient.startContainerCmd(containerId)
                     .exec();
+            log.debug("Plugin container started: containerId={}", containerId);
             dockerClient.waitContainerCmd(container.getId())
                     .exec(callback);
             String result;
+            var executionStartTime = System.nanoTime();
             try {
                 var exitCode = callback.awaitStatusCode(properties.containerWorkTimeout().getSeconds(), TimeUnit.SECONDS);
                 List<String> logsBuilder = new ArrayList<>();
@@ -121,21 +141,46 @@ public class JarExecutor {
                             }
                         })
                         .awaitCompletion(5, TimeUnit.SECONDS);
-                log.info("Container exited with: {}", exitCode.toString());
+                var durationMs = TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - executionStartTime);
+                log.info("Container exited with: {}", exitCode);
+                log.info("Plugin execution finished: pluginId={}, pluginClass={}, exitCode={}, duration={} ms, logLines={}",
+                        plugin.getId(), pluginClassName, exitCode, durationMs, logsBuilder.size());
+
+                if (exitCode != 0) {
+                    log.warn("Plugin container exited with non-zero code: pluginId={}, exitCode={}, containerId={}, logs={}",
+                            plugin.getId(), exitCode, containerId,
+                            truncate(String.join("\n", logsBuilder), MAX_LOG_SIZE));
+                }
 
                 String logs = String.join("\n", logsBuilder);
                 if(exceptionRegex.matcher(logs).find()){
+                    log.warn("Plugin execution finished with exception: pluginId={}, logs={}",
+                            plugin.getId(), truncate(logs, MAX_LOG_SIZE));
                     throw new PluginExecutionException(logs);
                 }
+                if (logsBuilder.isEmpty()) {
+                    log.warn("Plugin execution produced no output: pluginId={}, containerId={}",
+                            plugin.getId(), containerId);
+                    throw new BusinessException(Status.INTERNAL, "Плагин не вернул результат выполнения");
+                }
                 result = logsBuilder.getLast();
+                log.debug("Plugin execution result: pluginId={}, result={}", plugin.getId(), result);
             } catch (DockerClientException e) {
+                log.warn("Plugin execution timed out after {}: pluginId={}, containerId={}",
+                        properties.containerWorkTimeout(), plugin.getId(), containerId, e);
                 dockerClient.stopContainerCmd(container.getId()).withTimeout(5).exec();
                 throw new BusinessException(Status.DEADLINE_EXCEEDED,
                         "Время выполнения плагина превышино. " +
                                 "Время выполнения ограничено до " + properties.containerWorkTimeout());
             }
             return result;
+        } catch (BusinessException e) {
+            log.warn("Plugin jar execution rejected: pluginId={}, status={}, message={}",
+                    plugin.getId(), e.getStatus(), e.getMessage());
+            throw e;
         } catch (Exception e) {
+            log.error("Unexpected error while executing plugin jar: pluginId={}, pluginClass={}",
+                    plugin.getId(), plugin.getJarName(), e);
             throw new BusinessException(Status.INTERNAL, e.getMessage());
         } finally {
             if (containerId != null) {
@@ -153,6 +198,8 @@ public class JarExecutor {
                 if (pluginPath != null) Files.deleteIfExists(pluginPath);
                 if (runnerPath != null) Files.deleteIfExists(runnerPath);
                 if (graphPath != null) Files.deleteIfExists(graphPath);
+                log.debug("Temporary plugin files removed: plugin={}, runner={}, graph={}",
+                        pluginPath, runnerPath, graphPath);
             } catch (Exception e) {
                 log.warn("Failed to delete temporary files", e);
             }

@@ -19,6 +19,7 @@ import java.lang.reflect.InvocationTargetException;
 import java.net.URL;
 import java.net.URLClassLoader;
 import java.nio.file.Files;
+import java.util.concurrent.TimeUnit;
 
 import static java.time.LocalTime.now;
 import static java.util.UUID.randomUUID;
@@ -31,6 +32,19 @@ public class ExternalPluginService {
     private final JarExecutor jarExecutor;
 
     public String run(PluginEntity plugin, Solution solution) {
-        return jarExecutor.executeJar(plugin, solution);
+        log.debug("Running external plugin: pluginId={}, pluginClass={}, graphId={}",
+                plugin.getId(), plugin.getJarName(), solution.getGraph().getId());
+        var startTime = System.nanoTime();
+        try {
+            var result = jarExecutor.executeJar(plugin, solution);
+            log.debug("External plugin finished: pluginId={}, result={}, duration={} ms",
+                    plugin.getId(), result, TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime));
+            return result;
+        } catch (RuntimeException e) {
+            log.warn("External plugin failed: pluginId={}, pluginClass={}, duration={} ms, reason={}",
+                    plugin.getId(), plugin.getJarName(),
+                    TimeUnit.NANOSECONDS.toMillis(System.nanoTime() - startTime), e.getMessage());
+            throw e;
+        }
     }
 }
