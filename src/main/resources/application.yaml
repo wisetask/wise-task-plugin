@@ -6,7 +6,7 @@ spring:
       enabled: true
   grpc:
     server:
-      port: ${PLUGIN_GRPC_PORT:6567}
+      port: ${PLUGIN_GRPC_PORT:6566}
   datasource:
     url: jdbc:postgresql://${DB:localhost}:${DB_PORT:5432}/${PLUGIN_DB:wise_task_plugin}
     username: ${PLUGIN_DB_USER:wise_task_plugin}
