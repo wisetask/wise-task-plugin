@@ -12,7 +12,7 @@
             level = %level
         </labels>
         <message>
-            <pattern>app=${appName},host=${HOSTNAME},traceID=%X{traceId:-NONE},level=%level</pattern>
+            <pattern>app=${appName},host=${HOSTNAME},traceID=%X{traceId:-NONE},level=%level msg=%msg%ex</pattern>
         </message>
 
     </appender>
