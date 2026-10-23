@@ -4,11 +4,11 @@ import com.github.dockerjava.api.DockerClient;
 import com.github.dockerjava.api.async.ResultCallback;
 import com.github.dockerjava.api.command.WaitContainerResultCallback;
 import com.github.dockerjava.api.exception.DockerClientException;
-import com.github.dockerjava.api.model.Bind;
+import com.github.dockerjava.api.exception.NotFoundException;
 import com.github.dockerjava.api.model.Frame;
 import com.github.dockerjava.api.model.HostConfig;
-import com.github.dockerjava.api.model.Volume;
 import com.github.dockerjava.core.command.LogContainerResultCallback;
+import com.github.dockerjava.core.command.PullImageResultCallback;
 import io.grpc.Status;
 import jakarta.annotation.PostConstruct;
 import lombok.RequiredArgsConstructor;
@@ -26,9 +26,11 @@ import ru.leti.wise.task.plugin.error.BusinessException;
 import ru.leti.wise.task.plugin.error.PluginExecutionException;
 import ru.leti.wise.task.plugin.mapper.GraphMapper;
 
+import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.Paths;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.UUID;
@@ -45,13 +47,15 @@ public class JarExecutor {
     @Value("${spring.plugin.temp-folder}")
     private String tempFolder;
     private Path tempFolderPath;
-    String containerBaseDir = "/app";
+    String containerBaseDir = "/tmp";
     @Value("${spring.plugin.runner}")
     private Resource runnerJar;
 
     private final Pattern exceptionRegex = Pattern.compile("exception", Pattern.CASE_INSENSITIVE);
 
     private static final int MAX_LOG_SIZE = 2000;
+
+    private static final Duration IMAGE_PULL_TIMEOUT = Duration.ofMinutes(5);
 
     private String truncate(String value, int maxLength) {
         return value.length() <= maxLength ? value : value.substring(0, maxLength) + "...[truncated]";
@@ -60,7 +64,41 @@ public class JarExecutor {
     @PostConstruct
     public void postConstruct() {
         tempFolderPath = Paths.get(tempFolder).toAbsolutePath().normalize();
+        if (!Files.exists(tempFolderPath)) {
+            try {
+                Files.createDirectories(tempFolderPath);
+            } catch (IOException e) {
+                log.warn("Failed to create temp folder for plugin execution: {}", tempFolderPath, e);
+            }
+        }
         log.info("JarExecutor initialized: tempFolder={}, runnerJar={}", tempFolderPath, runnerJar);
+        try {
+            dockerClient.pingCmd().exec();
+            log.info("Docker daemon is reachable via {}", properties.host());
+        } catch (Exception e) {
+            log.warn("Docker daemon is NOT reachable via {}: external plugins will fail. " +
+                    "Check that the docker socket is mounted and the container user can access it", properties.host(), e);
+        }
+    }
+
+    private void ensureRunnerImagePulled(String image) {
+        try {
+            dockerClient.inspectImageCmd(image).exec();
+        } catch (NotFoundException e) {
+            log.info("Runner image not found locally, pulling: {}", image);
+            var callback = new PullImageResultCallback();
+            try {
+                dockerClient.pullImageCmd(image).exec(callback);
+                if (!callback.awaitCompletion(IMAGE_PULL_TIMEOUT.toSeconds(), TimeUnit.SECONDS)) {
+                    throw new BusinessException(Status.INTERNAL,
+                            "Не удалось скачать образ для запуска плагина за " + IMAGE_PULL_TIMEOUT + ": " + image);
+                }
+            } catch (InterruptedException ie) {
+                Thread.currentThread().interrupt();
+                throw new BusinessException(Status.INTERNAL, "Прервано скачивание образа плагина: " + image);
+            }
+            log.info("Runner image pulled: {}", image);
+        }
     }
 
     @SneakyThrows
@@ -88,7 +126,7 @@ public class JarExecutor {
                     solution.getGraph().getId(), graph.getVertexCount(), graph.getEdgeCount(), randomId);
             var pluginName = pluginClassName + "-" + randomId + ".jar";
             var jsonGraphFileName = "graph-" + randomId + ".json";
-            var runnerFileName = "runner.jar";
+            var runnerFileName = "runner-" + randomId + ".jar";
             pluginPath = tempFolderPath.resolve(pluginName);
             runnerPath = tempFolderPath.resolve(runnerFileName);
             graphPath = tempFolderPath.resolve(jsonGraphFileName);
@@ -101,8 +139,8 @@ public class JarExecutor {
             Files.writeString(graphPath, jsonGraph);
             log.debug("Plugin execution files prepared: plugin={}, runner={}, graph={}, graphJsonSize={} bytes",
                     pluginPath.getFileName(), runnerPath.getFileName(), graphPath.getFileName(), jsonGraph.length());
-            var bind = new Bind(tempFolderPath.toAbsolutePath().toString(), new Volume(containerBaseDir));
-            var container = dockerClient.createContainerCmd("eclipse-temurin:25-jre-alpine")
+            ensureRunnerImagePulled(properties.runnerImage());
+            var container = dockerClient.createContainerCmd(properties.runnerImage())
                     .withCmd("sh", "-c",
                             "java -cp " + containerBaseDir + "/" + runnerFileName + " ru.leti.wise.task.Runner " +
                                     containerBaseDir + "/" + pluginName + " " +
@@ -114,11 +152,17 @@ public class JarExecutor {
                             .withCpuQuota(properties.cpuQuota())
                             .withReadonlyRootfs(false)
                             .withNetworkMode("none")
-                            .withBinds(bind)
                     ).exec();
             containerId = container.getId();
             log.info("Plugin container created: containerId={}, pluginId={}, pluginClass={}",
                     containerId, plugin.getId(), pluginClassName);
+            for (Path file : List.of(pluginPath, runnerPath, graphPath)) {
+                dockerClient.copyArchiveToContainerCmd(containerId)
+                        .withHostResource(file.toAbsolutePath().toString())
+                        .withRemotePath(containerBaseDir)
+                        .exec();
+            }
+            log.debug("Plugin execution files copied into container: containerId={}", containerId);
             var callback = new WaitContainerResultCallback();
             dockerClient.startContainerCmd(containerId)
                     .exec();

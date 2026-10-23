@@ -11,6 +11,7 @@ public record DockerProperties(
         Duration responseTimeout,
         Long memoryUsageMb,
         Long cpuQuota,
-        Duration containerWorkTimeout
+        Duration containerWorkTimeout,
+        String runnerImage
 ) {
 }

@@ -27,9 +27,10 @@ spring:
     memory-usage-mb: 256
     cpu-quota: 50000 # 0.5 cpu
     container-work-timeout: 10s
+    runner-image: ${PLUGIN_RUNNER_IMAGE:eclipse-temurin:25-jre-alpine}
   plugin:
-    temp-folder: "./plugin"
-    runner: file:src/main/resources/runner.jar
+    temp-folder: ${PLUGIN_TEMP_FOLDER:/tmp/wise-task-plugin}
+    runner: classpath:runner.jar
 
 
 path-plugin: ${PLUGIN_PATH:./plugins/}
