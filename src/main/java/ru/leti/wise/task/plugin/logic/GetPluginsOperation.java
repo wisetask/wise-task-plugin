@@ -18,6 +18,7 @@ import ru.leti.wise.task.plugin.repository.PluginRepository;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.UUID;
 
 @Slf4j
 @Component
@@ -88,7 +89,7 @@ public class GetPluginsOperation {
                 predicates.add(cb.equal(root.get("isInternal"), filter.getIsInternal()));
 
             if (filter.hasAuthorId())
-                predicates.add(cb.equal(root.get("authorId"), filter.getAuthorId()));
+                predicates.add(cb.equal(root.get("authorId"), UUID.fromString(filter.getAuthorId())));
 
             return cb.and(predicates.toArray(Predicate[]::new));
         };
