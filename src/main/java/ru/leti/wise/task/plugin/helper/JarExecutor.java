@@ -218,9 +218,9 @@ public class JarExecutor {
                                 "Время выполнения ограничено до " + properties.containerWorkTimeout());
             }
             return result;
-        } catch (BusinessException e) {
-            log.warn("Plugin jar execution rejected: pluginId={}, status={}, message={}",
-                    plugin.getId(), e.getStatus(), e.getMessage());
+        } catch (BusinessException | PluginExecutionException e) {
+            log.warn("Plugin jar execution failed: pluginId={}, message={}",
+                    plugin.getId(), truncate(e.getMessage() == null ? "" : e.getMessage(), MAX_LOG_SIZE));
             throw e;
         } catch (Exception e) {
             log.error("Unexpected error while executing plugin jar: pluginId={}, pluginClass={}",

@@ -30,18 +30,11 @@ public interface GraphMapper {
 
     @AfterMapping
     default void mapVertexAndEdgeLists(@MappingTarget Graph.GraphBuilder builder, GraphOuterClass.Graph source) {
-        if (!source.getVertexListList().isEmpty()) {
-            List<Vertex> vertices = source.getVertexListList().stream()
-                    .map(this::toVertex)
-                    .collect(Collectors.toList());
-            builder.vertexList(vertices);
-        }
-
-        if (!source.getEdgeListList().isEmpty()) {
-            List<Edge> edges = source.getEdgeListList().stream()
-                    .map(this::toEdge)
-                    .collect(Collectors.toList());
-            builder.edgeList(edges);
-        }
+        builder.vertexList(source.getVertexListList().stream()
+                .map(this::toVertex)
+                .collect(Collectors.toList()));
+        builder.edgeList(source.getEdgeListList().stream()
+                .map(this::toEdge)
+                .collect(Collectors.toList()));
     }
 }
