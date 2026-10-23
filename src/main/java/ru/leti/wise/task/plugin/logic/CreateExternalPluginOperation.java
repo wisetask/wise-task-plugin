@@ -33,11 +33,18 @@ public class CreateExternalPluginOperation {
     public CreatePluginResponse activate(CreatePluginRequest request) {
         Plugin plugin = request.getPlugin();
         PluginEntity pluginEntity = pluginMapper.pluginToPluginEntity(plugin);
+        log.info("Creating plugin: id={}, name={}, jarName={}, pluginType={}, graphType={}, internal={}",
+                pluginEntity.getId(), pluginEntity.getName(), pluginEntity.getJarName(),
+                pluginEntity.getPluginType(), pluginEntity.getGraphType(), pluginEntity.getIsInternal());
         if(pluginEntity.getJarFile() == null){
+            log.warn("Cannot create plugin without jar file: id={}, name={}",
+                    pluginEntity.getId(), pluginEntity.getName());
             throw new BusinessException(Status.INVALID_ARGUMENT, "Отсутствует Jar файл для плагина");
         }
+        log.debug("Plugin jar received: id={}, jarSize={} bytes", pluginEntity.getId(), pluginEntity.getJarFile().length);
         pluginValidationService.validatePlugin(pluginEntity);
         pluginRepository.save(pluginEntity);
+        log.info("Plugin created: id={}, name={}", pluginEntity.getId(), pluginEntity.getName());
 
         return CreatePluginResponse.newBuilder()
                 .setPlugin(plugin)

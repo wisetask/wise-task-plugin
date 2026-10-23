@@ -2,6 +2,7 @@ package ru.leti.wise.task.plugin.logic;
 
 import io.grpc.Status;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.stereotype.Component;
 import ru.leti.wise.task.plugin.PluginGrpc.CheckPluginImplementationRequest;
 import ru.leti.wise.task.plugin.PluginGrpc.CheckPluginImplementationResponse;
@@ -21,12 +22,16 @@ import java.util.ArrayList;
 import java.util.Base64;
 import java.util.List;
 import java.util.concurrent.ThreadLocalRandom;
+import java.util.concurrent.TimeUnit;
 
 import static java.util.UUID.fromString;
 
+@Slf4j
 @Component
 @RequiredArgsConstructor
 public class CheckPluginImplementationOperation {
+
+    private static final int TEST_RUNS = 5;
 
     private final PluginRepository pluginRepository;
     private final GraphGrpcService graphGrpcService;
@@ -36,12 +41,21 @@ public class CheckPluginImplementationOperation {
     public CheckPluginImplementationResponse activate(CheckPluginImplementationRequest request) {
 
         var basePluginEntity = pluginRepository.findById(fromString(request.getId()))
-                .orElseThrow(() -> new BusinessException(Status.NOT_FOUND, "Плагин не найден"));
+                .orElseThrow(() -> {
+                    log.warn("Plugin not found for implementation check: id={}", request.getId());
+                    return new BusinessException(Status.NOT_FOUND, "Плагин не найден");
+                });
 
         if (basePluginEntity.getPluginType() != PluginType.GRAPH_PROPERTY
                 && basePluginEntity.getPluginType() != PluginType.GRAPH_CHARACTERISTIC) {
+            log.warn("Unsupported plugin type for implementation check: pluginId={}, pluginType={}",
+                    basePluginEntity.getId(), basePluginEntity.getPluginType());
             throw new BusinessException(Status.INVALID_ARGUMENT, "Тип плагина некорректный");
         }
+
+        log.info("Checking plugin implementation: basePluginId={}, pluginType={}, jarSize={} bytes, runs={}",
+                basePluginEntity.getId(), basePluginEntity.getPluginType(),
+                request.getFile().length(), TEST_RUNS);
 
         List<GraphTestResult> graphTestResults = new ArrayList<>();
         boolean result = true;
@@ -51,14 +65,23 @@ public class CheckPluginImplementationOperation {
                 .jarName(basePluginEntity.getJarName())
                 .build();
 
-        for (int i = 0; i < 5; i++) {
+        for (int i = 0; i < TEST_RUNS; i++) {
             var graphTestResult = runAlgorithms(basePluginEntity, newPluginEntity);
             if (!graphTestResult.getResult().equals(graphTestResult.getOriginalResult())) {
                 result = false;
+                log.debug("Implementation test run #{}: mismatch for graphId={}, original={}, new={}",
+                        i + 1, graphTestResult.getGraphId(),
+                        graphTestResult.getOriginalResult(), graphTestResult.getResult());
+            } else {
+                log.debug("Implementation test run #{}: match for graphId={}, result={}",
+                        i + 1, graphTestResult.getGraphId(), graphTestResult.getResult());
             }
             graphTestResults.add(graphTestResult);
 
         }
+
+        log.info("Plugin implementation checked: basePluginId={}, result={}, runs={}",
+                basePluginEntity.getId(), result, graphTestResults.size());
 
         return CheckPluginImplementationResponse.newBuilder()
                 .setImplementationResult(PluginOuterClass.ImplementationResult.newBuilder()
@@ -70,6 +93,9 @@ public class CheckPluginImplementationOperation {
 
     private GraphTestResult runAlgorithms(PluginEntity basePluginEntity, PluginEntity newPluginEntity) {
         var solution = generateSolution();
+        log.debug("Running implementation test: basePluginId={}, newPluginId={}, graphId={}, vertices={}, edges={}",
+                basePluginEntity.getId(), newPluginEntity.getId(), solution.getGraph().getId(),
+                solution.getGraph().getVertexListCount(), solution.getGraph().getEdgeListCount());
         final long baseStartTime = System.nanoTime();
         var originalResult = basePluginEntity.getIsInternal()
                 ? internalPluginService.run(basePluginEntity, solution)
@@ -79,6 +105,9 @@ public class CheckPluginImplementationOperation {
         final long newStartTime = System.nanoTime();
         var newResult = externalPluginService.run(newPluginEntity, solution);
         final long newDuration = System.nanoTime() - newStartTime;
+        log.debug("Implementation test finished: graphId={}, originalResult={}, originalDuration={} ms, newResult={}, newDuration={} ms",
+                solution.getGraph().getId(), originalResult, TimeUnit.NANOSECONDS.toMillis(originalDuration),
+                newResult, TimeUnit.NANOSECONDS.toMillis(newDuration));
 
         return GraphTestResult.newBuilder()
                 .setGraphId(solution.getGraph().getId())

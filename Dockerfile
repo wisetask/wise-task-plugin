@@ -22,6 +22,7 @@ WORKDIR /app
 COPY --from=build /app/build/libs/*.jar app.jar
 
 RUN addgroup -S wise-task && adduser -S wise-task-plugin -G wise-task # security
+RUN mkdir -p /tmp/wise-task-plugin && chown -R wise-task-plugin:wise-task /tmp/wise-task-plugin
 USER wise-task-plugin
 
 ENTRYPOINT ["java","-jar","app.jar"]

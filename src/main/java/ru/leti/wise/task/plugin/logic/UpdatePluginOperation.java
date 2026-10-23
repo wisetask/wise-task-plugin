@@ -23,18 +23,24 @@ public class UpdatePluginOperation {
 
     public UpdatePluginResponse activate(UpdatePluginRequest request) {
         var requestPlugin = pluginMapper.pluginToPluginEntity(request.getPlugin());
+        log.info("Updating plugin: id={}, name={}", requestPlugin.getId(), requestPlugin.getName());
         var pluginEntity = pluginRepository.findById(requestPlugin.getId())
-                .orElseThrow(() -> new BusinessException(Status.NOT_FOUND,
-                                "Плагин с id: %s не найден".formatted(requestPlugin.getId())
-                        )
-                );
+                .orElseThrow(() -> {
+                    log.warn("Plugin not found for update: id={}", requestPlugin.getId());
+                    return new BusinessException(Status.NOT_FOUND,
+                            "Плагин с id: %s не найден".formatted(requestPlugin.getId()));
+                });
         pluginMapper.updatePlugin(requestPlugin, pluginEntity);
         if (requestPlugin.getJarFile() != null) {
             pluginEntity.setJarFile(requestPlugin.getJarFile());
             pluginEntity.setJarName(requestPlugin.getJarName());
+            log.debug("Plugin jar updated: id={}, jarName={}, jarSize={} bytes",
+                    pluginEntity.getId(), pluginEntity.getJarName(), pluginEntity.getJarFile().length);
             pluginValidationService.validatePlugin(requestPlugin);
             pluginRepository.save(pluginEntity);
+            log.info("Plugin updated: id={}", pluginEntity.getId());
         } else {
+            log.warn("Cannot update plugin without jar file: id={}", requestPlugin.getId());
             throw new BusinessException(Status.INVALID_ARGUMENT, "Отсутствует Jar файл для плагина");
         }
 

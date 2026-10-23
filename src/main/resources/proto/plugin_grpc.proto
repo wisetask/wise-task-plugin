@@ -3,10 +3,12 @@ syntax = "proto3";
 package ru.leti.wise.task.plugin;
 
 import "plugin.proto";
+import "pagination.proto";
 import "google/protobuf/empty.proto";
 
 service PluginService {
   rpc GetAllPlugins (GetAllPluginRequest) returns (GetAllPluginsResponse);
+  rpc GetPluginsByIds(PluginIds) returns (GetPluginsByIdsResponse);
   rpc CreatePlugin (CreatePluginRequest) returns (CreatePluginResponse);
   rpc GetPlugin (GetPluginRequest) returns (GetPluginResponse);
   rpc UpdatePlugin (UpdatePluginRequest) returns (UpdatePluginResponse);
@@ -14,11 +16,6 @@ service PluginService {
   rpc CheckPluginSolution (CheckPluginSolutionRequest) returns (CheckPluginSolutionResponse);
   rpc CheckPluginImplementation (CheckPluginImplementationRequest) returns (CheckPluginImplementationResponse);
   rpc ValidatePlugin (ValidatePluginRequest) returns (ValidatePluginResponse);
-}
-
-message PaginationRequest {
-  int32 page_size = 1;
-  int32 page = 2;
 }
 
 message PluginFilter {
@@ -33,22 +30,12 @@ message PluginFilter {
 }
 
 message GetAllPluginRequest {
-  PaginationRequest pagination = 1;
+  ru.leti.wise.task.pagination.PaginationRequest pagination = 1;
   PluginFilter filter = 2;
 }
-
-message PaginationResponse {
-  int32 page = 1;
-  int32 page_size = 2;
-  int64 total_count = 3;
-  int32 total_pages = 4;
-  bool has_next = 5;
-  bool has_previous = 6;
-}
-
 message GetAllPluginsResponse {
   repeated Plugin items = 1;
-  PaginationResponse pagination = 2;
+  ru.leti.wise.task.pagination.PaginationResponse pagination = 2;
 }
 
 message CreatePluginRequest {
@@ -106,4 +93,12 @@ message CheckPluginImplementationRequest {
 
 message CheckPluginImplementationResponse {
   ImplementationResult implementation_result = 1;
+}
+
+message PluginIds {
+  repeated string plugin_ids = 1;
+}
+
+message GetPluginsByIdsResponse {
+  repeated Plugin plugins = 1;
 }
